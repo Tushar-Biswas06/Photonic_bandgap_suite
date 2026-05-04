@@ -4,7 +4,7 @@ An interactive computational suite for calculating and visualizing the optical p
 
 This application bridges advanced theoretical physics with accessible software engineering, utilizing **Python**, **Streamlit**, and fundamental numerical methods to provide real-time solving of Maxwell's equations for periodic dielectric media.
 
-**Live Application:** [Insert your Streamlit Cloud Link Here]
+**Live Application:** [https://photonicbandgapsuite-cbo4zhgm2tlhbbpugujkqn.streamlit.app/]
 
 ---
 
