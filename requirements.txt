@@ -1,1 +1,4 @@
--e streamlit\nnumpy\nscipy\nmatplotlib
+streamlit
+numpy
+scipy
+matplotlib
