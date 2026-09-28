@@ -1,0 +1,5 @@
+scikit-fem>=9
+triangle
+numpy
+scipy
+matplotlib
