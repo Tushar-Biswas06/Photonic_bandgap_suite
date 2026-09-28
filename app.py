@@ -1,9 +1,9 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.special import j1
-from scipy.linalg import eigh
 import time
+
+from pbs.pwem2d import pwem_bands
 
 # --- UI Configuration ---
 st.set_page_config(page_title="Photonic Bandgap Suite", layout="wide")
@@ -112,114 +112,45 @@ else:
     eps_rod = st.sidebar.number_input("Rod Dielectric (ε_a)", value=11.5 if mode=="2D Square Lattice" else 1.0, step=0.5)
     eps_bg = st.sidebar.number_input("Background Dielectric (ε_b)", value=1.0 if mode=="2D Square Lattice" else 12.0, step=0.5)
     Rc_frac = st.sidebar.slider("Radius Fraction (r/a)", 0.10, 0.50, 0.20 if mode=="2D Square Lattice" else 0.48, 0.01)
-    NrSquare = st.sidebar.slider("Plane Waves (Resolution)", 3, 11, 6)
+    NrSquare = st.sidebar.slider("Plane Waves (Resolution)", 3, 21, 6,
+                                 help="G = l b1 + m b2 with |l|,|m| <= N. N = 21 is ~1700 plane waves "
+                                      "and takes a few minutes on a laptop.")
+    method_options = {
+        "inverse rule (recommended)": "inverse",
+        "inverse rule + fast Fourier factorization for TE (square lattice only)": "fff",
+        "direct 1/ε transform (legacy)": "direct",
+    }
+    method_label = st.sidebar.selectbox(
+        "Fourier factorization of 1/ε", list(method_options),
+        help="'inverse rule': invert the Toeplitz matrix of the Fourier coefficients of ε "
+             "(Ho, Chan & Soukoulis 1990; Li 1996). '+ fast Fourier factorization': additionally "
+             "applies Li's normal/tangential rules to the TE operator (Popov & Nevière 2001). "
+             "'direct': Fourier-transform 1/ε itself; converges slowly at high contrast. "
+             "See README, Benchmark section.")
+    method = method_options[method_label]
+    if method == "fff" and mode != "2D Square Lattice":
+        st.sidebar.warning("Fast Fourier factorization is implemented for the square lattice only; using the inverse rule.")
+        method = "inverse"
 
     @st.cache_data(show_spinner=False)
-    def compute_2d_bands(lattice_type, a, eps_rod, eps_bg, Rc_frac, NrSquare):
-        Rc = Rc_frac * a
-        
-        if lattice_type == "2D Triangular Lattice":
-            a1 = a * np.array([1, 0])
-            a2 = a * np.array([0.5, np.sqrt(3)/2])
-            Au = np.linalg.norm(np.cross(np.append(a1, 0), np.append(a2, 0)))
-            ra1 = (2*np.pi/a) * np.array([1, -1/np.sqrt(3)])
-            ra2 = (2*np.pi/a) * np.array([0, 2/np.sqrt(3)])
-            T_pt = np.array([0, 0])
-            M_pt = (2*np.pi/a) * np.array([0, 1/np.sqrt(3)])
-            K_pt = (2*np.pi/a) * np.array([1/3, np.sqrt(3)/3])
-            path_pts = [T_pt, M_pt, K_pt, T_pt]
-            labels = [r'$\Gamma$', 'M', 'K', r'$\Gamma$']
-        else:
-            a1 = a * np.array([1, 0])
-            a2 = a * np.array([0, 1])
-            Au = a**2
-            ra1 = (2*np.pi/a) * np.array([1, 0])
-            ra2 = (2*np.pi/a) * np.array([0, 1])
-            T_pt = np.array([0, 0])
-            X_pt = (np.pi/a) * np.array([1, 0])
-            M_pt = (np.pi/a) * np.array([1, 1])
-            path_pts = [T_pt, X_pt, M_pt, T_pt]
-            labels = [r'$\Gamma$', 'X', 'M', r'$\Gamma$']
+    def compute_2d_bands(lattice_type, a, eps_rod, eps_bg, Rc_frac, NrSquare, method="inverse"):
+        """Thin wrapper around pbs.pwem2d.pwem_bands (same return tuple as before).
 
-        Pf = np.pi * Rc**2 / Au
-        Gmax = 1.1 * NrSquare * np.linalg.norm(ra1)
-        
-        G_list = []
-        for l in range(-NrSquare, NrSquare+1):
-            for m in range(-NrSquare, NrSquare+1):
-                Glm = l * ra1 + m * ra2
-                if np.linalg.norm(Glm) < Gmax:
-                    G_list.append(Glm)
-        G = np.array(G_list)
-        NG = len(G)
-
-        # Structure Factor F(G-G')
-        F = np.zeros((NG, NG))
-        inv_eps_a = 1.0 / eps_rod
-        inv_eps_b = 1.0 / eps_bg
-        
-        for i in range(NG):
-            for j in range(NG):
-                Gij_norm = np.linalg.norm(G[i] - G[j])
-                if Gij_norm < 1e-10:
-                    F[i,j] = inv_eps_a * Pf + inv_eps_b * (1 - Pf)
-                else:
-                    F[i,j] = (inv_eps_a - inv_eps_b) * Pf * 2 * j1(Gij_norm * Rc) / (Gij_norm * Rc)
-
-        Nkpoints = 20
-        all_k = []
-        x_ticks = [0]
-        current_x = 0
-        x_axis = []
-        
-        for i in range(len(path_pts)-1):
-            start_k = path_pts[i]
-            end_k = path_pts[i+1]
-            dist = np.linalg.norm(end_k - start_k)
-            segment_k = [start_k + s * (end_k - start_k) for s in np.linspace(0, 1, Nkpoints)]
-            
-            if i > 0:
-                segment_k = segment_k[1:]
-                segment_x = np.linspace(current_x, current_x + dist, Nkpoints)[1:]
-            else:
-                segment_x = np.linspace(current_x, current_x + dist, Nkpoints)
-                
-            all_k.extend(segment_k)
-            x_axis.extend(segment_x)
-            current_x += dist
-            x_ticks.append(current_x)
-
-        all_k = np.array(all_k)
-        total_k = len(all_k)
-        
-        TE_bands = np.zeros((total_k, NG))
-        TM_bands = np.zeros((total_k, NG))
-
-        for idx, k in enumerate(all_k):
-            kG = k + G  # Shape: (NG, 2)
-            
-            # TE Matrix (H-polarization): (k+G_i) . (k+G_j) * F_ij
-            dot_kG = kG @ kG.T
-            M_TE = dot_kG * F
-            
-            # TM Matrix (E-polarization): |k+G_i| * |k+G_j| * F_ij
-            norm_kG = np.linalg.norm(kG, axis=1)
-            M_TM = np.outer(norm_kG, norm_kG) * F
-            
-            vals_TE = eigh(M_TE, eigvals_only=True)
-            vals_TM = eigh(M_TM, eigvals_only=True)
-            
-            TE_bands[idx, :] = np.sqrt(np.maximum(vals_TE, 0))
-            TM_bands[idx, :] = np.sqrt(np.maximum(vals_TM, 0))
-
-        return x_axis, x_ticks, labels, TE_bands, TM_bands, NG
+        Bands are returned as omega/c (rad per unit length); the plot divides
+        by 2*pi/a as it always did.
+        """
+        r = pwem_bands(lattice_type, eps_rod, eps_bg, Rc_frac, NrSquare,
+                       method=method, a=a, n_per_segment=20, nbands=10)
+        norm_fact = 2 * np.pi / a
+        return (list(r["x_axis"]), r["x_ticks"], r["labels"],
+                r["TE"] * norm_fact, r["TM"] * norm_fact, r["NG"])
 
     with st.spinner(f"Solving TE and TM matrices for {mode}..."):
         start_time = time.time()
-        x_axis, x_ticks, labels, TE_bands, TM_bands, NG = compute_2d_bands(mode, a_val, eps_rod, eps_bg, Rc_frac, NrSquare)
+        x_axis, x_ticks, labels, TE_bands, TM_bands, NG = compute_2d_bands(mode, a_val, eps_rod, eps_bg, Rc_frac, NrSquare, method)
         calc_time = time.time() - start_time
 
-    st.success(f"Decomposed {NG}x{NG} complex matrices in {calc_time:.2f} seconds.")
+    st.success(f"Diagonalized {NG}x{NG} matrices ({method_label}) in {calc_time:.2f} seconds.")
 
     fig, ax = plt.subplots(figsize=(10, 7))
     norm_fact = 2 * np.pi / a_val
