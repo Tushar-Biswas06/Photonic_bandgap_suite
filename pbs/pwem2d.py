@@ -6,7 +6,11 @@ separately.
 
 Two Fourier factorizations of the dielectric are available:
 
-``method="inverse"`` (default, correct)
+Default (``method=None``): ``"fff"`` on the square lattice, ``"inverse"`` on
+the triangular lattice (where ``"fff"`` is not implemented).  TM is the
+inverse rule in both cases; the default only changes the TE operator.
+
+``method="inverse"`` (correct)
     Build the Toeplitz matrix ``E[i, j] = eps_hat(G_i - G_j)`` from the Fourier
     coefficients of eps(r) and use its matrix inverse ``E^{-1}`` in the
     operators.  This is the "inverse rule" of Ho, Chan & Soukoulis, PRL 65,
@@ -235,7 +239,7 @@ def bands_at_k(k, G, Finv, nbands=None, Fte=None):
     return np.sqrt(np.maximum(te, 0)), np.sqrt(np.maximum(tm, 0))
 
 
-def pwem_bands(lattice_type, eps_rod, eps_bg, r_a, N, method="inverse",
+def pwem_bands(lattice_type, eps_rod, eps_bg, r_a, N, method=None,
                a=1.0, kpoints=None, n_per_segment=20, nbands=None):
     """Band structure of a 2D photonic crystal by PWEM.
 
@@ -245,7 +249,8 @@ def pwem_bands(lattice_type, eps_rod, eps_bg, r_a, N, method="inverse",
     eps_rod, eps_bg : rod and background permittivity
     r_a : rod radius / lattice constant
     N : plane-wave order; G = l ra1 + m ra2 with |l|,|m| <= N (circular cut)
-    method : "inverse" (default), "direct" or "fff"
+    method : None (default: "fff" on the square lattice, "inverse" on the
+             triangular lattice), "inverse", "direct" or "fff"
     kpoints : optional (Nk,2) array of k in units where a = ``a``; default is
               the Gamma-...-Gamma path with ``n_per_segment`` points per leg
     nbands : number of lowest bands to return (default: all NG)
@@ -255,9 +260,11 @@ def pwem_bands(lattice_type, eps_rod, eps_bg, r_a, N, method="inverse",
     dict with keys k, x_axis, x_ticks, labels, TE, TM (arrays of
     omega a / 2 pi c, shape (Nk, nbands)), NG, G, method
     """
+    geo = lattice_geometry(lattice_type, a)
+    if method is None:
+        method = "fff" if geo["Au"] == a * a else "inverse"
     if method not in METHODS:
         raise ValueError(f"method must be one of {METHODS}, got {method!r}")
-    geo = lattice_geometry(lattice_type, a)
     G = reciprocal_vectors(geo["ra1"], geo["ra2"], N)
     Finv = inv_eps_matrix(G, eps_rod, eps_bg, r_a * a, geo["Au"], method)
     Fte = None

@@ -40,14 +40,14 @@ where 𝓕 is the matrix that represents multiplication by 1/ε(**r**) in the tr
 | `method` | 𝓕 | reference |
 |---|---|---|
 | `"direct"` (legacy) | Toeplitz matrix of the Fourier coefficients of 1/ε: 𝓕<sub>ij</sub> = (1/ε)^(**G**<sub>i</sub> − **G**<sub>j</sub>) — Laurent's rule | Plihal & Maradudin, PRB 44, 8565 (1991) |
-| `"inverse"` (default) | inverse of the Toeplitz matrix of ε: 𝓕 = [ε]<sup>−1</sup>, [ε]<sub>ij</sub> = ε̂(**G**<sub>i</sub> − **G**<sub>j</sub>) — the inverse rule | Ho, Chan & Soukoulis, PRL 65, 3152 (1990); Li, JOSA A 13, 1870 (1996) |
-| `"fff"` | TM as `"inverse"`; TE uses 𝓕<sub>αβ</sub> = [1/ε] δ<sub>αβ</sub> − ([1/ε] − [ε]<sup>−1</sup>) [N<sub>α</sub>N<sub>β</sub>] with **N** the rod-boundary normal — fast Fourier factorization (square lattice) | Popov & Nevière, JOSA A 18, 2886 (2001); David, Benisty & Weisbuch, JOSA A 23, 1141 (2006) |
+| `"inverse"` (default on the triangular lattice) | inverse of the Toeplitz matrix of ε: 𝓕 = [ε]<sup>−1</sup>, [ε]<sub>ij</sub> = ε̂(**G**<sub>i</sub> − **G**<sub>j</sub>) — the inverse rule | Ho, Chan & Soukoulis, PRL 65, 3152 (1990); Li, JOSA A 13, 1870 (1996) |
+| `"fff"` (default on the square lattice) | TM as `"inverse"`; TE uses 𝓕<sub>αβ</sub> = [1/ε] δ<sub>αβ</sub> − ([1/ε] − [ε]<sup>−1</sup>) [N<sub>α</sub>N<sub>β</sub>] with **N** the rod-boundary normal — fast Fourier factorization (square lattice) | Popov & Nevière, JOSA A 18, 2886 (2001); David, Benisty & Weisbuch, JOSA A 23, 1141 (2006) |
 
 For a circular rod of radius *R* in a cell of area *A*<sub>u</sub> the Fourier coefficients are analytic: ε̂(0) = ε<sub>rod</sub> *f* + ε<sub>bg</sub>(1 − *f*) and ε̂(**G**) = (ε<sub>rod</sub> − ε<sub>bg</sub>) *f* · 2 J<sub>1</sub>(|**G**|R)/(|**G**|R), with *f* = πR²/*A*<sub>u</sub>.
 
 ```python
 from pbs.pwem2d import pwem_bands
-r = pwem_bands("square", eps_rod=12.0, eps_bg=1.0, r_a=0.2, N=11)   # method="inverse"
+r = pwem_bands("square", eps_rod=12.0, eps_bg=1.0, r_a=0.2, N=11)   # default method: "fff" on the square lattice (TE), TM as "inverse"
 r["TE"], r["TM"]           # (Nk, nbands) arrays of omega a / 2 pi c along Gamma-X-M-Gamma
 ```
 
